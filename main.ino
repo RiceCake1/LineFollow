@@ -2,7 +2,7 @@
 #define ML2 3
 #define MR1 1
 #define MR2 4
-#define MP1 4
+#define MP1 0
 #define MP2 5
 #define MPDA 10
 #define MPDB 9
@@ -62,8 +62,8 @@ void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
 
 float _getSpeed( int encoderNum ){
   SelectMultiplexer(encoderNum);
-  int pulseWidth = pulseIn(MP2, HIGH, 50000);
-
+  int pulseWidth = pulseIn(MP2, HIGH, 40000);
+  if(pulseWidth==0) return 0;
   int pulsePerRotate = 11;
   float MotorFreq = 1000000/(pulseWidth*2*pulsePerRotate);
   float enshu = wheelDiameter*PI;//cm
@@ -74,6 +74,16 @@ float _getSpeed( int encoderNum ){
 void getSpeed(float *spd){
   spd[0] = _getSpeed(0);
   spd[1] = _getSpeed(2);
+}
+
+int getLinePos(){
+  int linePos = 0;
+  for(int i=0; i<8; i++){
+    int weight = i-3;
+    if(weight<=0) weight--; 
+    linePos += ReadSensor(i)*weight;
+  }
+  return linePos;
 }
 
 void initAll(){
@@ -112,10 +122,19 @@ void setup() {
   initAll();
 }
 
+float pwrR;
+float pwrL;
+int spdPrev[2]; 
+float kP = 1;
+float kI = 1;
+float kD = 1;
+
 void loop() {
   float spd[2];
   getSpeed(spd);
-  Serial.print(spd[0]);
-  Serial.print(", ");
-  Serial.println(spd[1]);
+  
+  pwrR += (10-spd[0])/200 + spdPrev[0]-spd[0]*kD;
+  pwrL += (10-spd[1])/200 + spdPrev[1]-spd[1]*kD;
+  ControlMotor(pwrR, pwrL);
+  delay(500);
 }
