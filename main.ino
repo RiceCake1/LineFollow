@@ -28,7 +28,7 @@ void SelectMultiplexer(int Dec){
   digitalWrite(MPDA, Bin[0]);
 }
 
-int LSensor(int sensorNum){
+int ReadSensor(int sensorNum){
   SelectMultiplexer(sensorNum);
   return MP1;
 }
@@ -38,20 +38,20 @@ int ReadEncoder(int encoderNum){
   return digitalRead(MP2);
 }
 
-void ControlMotor(float R, float L){ //range -1 to 1
-  if(R>=0){
-    analogWrite(MR1, int(256*R));
+void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
+  if(Rspeed>=0){
+    analogWrite(MR1, int(255*Rspeed));
     analogWrite(MR2, 0);
   }else{
-    analogWrite(MR2, int(256*(-R)));
+    analogWrite(MR2, int(255*(-Rspeed)));
     analogWrite(MR1, 0);
   }
 
-  if(L>=0){
-    analogWrite(ML1, int(256*L));
+  if(Lspeed>=0){
+    analogWrite(ML1, int(255*Lspeed));
     analogWrite(ML2, 0);
   }else{
-    analogWrite(ML2, int(256*(-L)));
+    analogWrite(ML2, int(255*(-Lspeed)));
     analogWrite(ML1, 0);
   }
 }
