@@ -61,16 +61,15 @@ void ControlMotor(float R, float L){ //range -1 to 1
   }
 }
 
-int flg1 = 0;
-int flg2 = 0;
-unsigned int MRSS[] = {0,0,0,0};
+int flgR = 0;
+int flgL = 0;
+unsigned int microSec[] = {0,0,0,0};
 int MS[4][2] = {{0,0},{0,0},{0,0},{0,0}};
 int spdR;
 int spdL;
 void updateSpeed(){
   int MSensor_stream[4][3] = {{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
   for(int i = 0; i < 4; i++){
-
     for(int k = 0; k < 2; k++){
       MSensor_stream[i][k] = digitalRead(MSensor(i));
       delayMicroseconds(3);
@@ -84,15 +83,29 @@ void updateSpeed(){
     }
   }
 
-  if(!flg1){
+  if(!flgR){
     if(MS[0][0]==1 && MS[0][1]==0){
-
+      flgR = 1;
+      microSec[0] = micros();
+    }else if(MS[1][0]==1 && MS[1][1]==0){
+      flgR = 1;
+      microSec[1] = micros();
     }
   }else{
-
+    if(MS[1][0]==1 && MS[1][1]==0 && microSec[1]==0){
+      flgR = 0;
+      spdR = micros() - microSec[0];
+      microSec[0] = 0;
+      microSec[1] = 0;
+    }else if(MS[0][0]==1 && MS[0][1]==0 && microSec[0]==0){
+      flgR = 0;
+      spdR = microSec[1] - micros();
+      microSec[0] = 0;
+      microSec[1] = 0;
+    }
   }
-
 }
+
 void initAll(){
   //Motors init
   pinMode(MR1, OUTPUT);
@@ -133,23 +146,5 @@ void loop() {
   Serial.print(spdR);
   Serial.print(", ");
   Serial.println(spdL);
-
-  //Serial.println(pulseIn(MSensor(0),HIGH,30000));
-  //Serial.println(pulseIn(MSensor(2),HIGH,30000));
-
-  // int spd = 9000;
-  // float pwr = 0;
-  //   int cspd = pulseIn(MSensor(0),HIGH,30000);
-  //   int dspd = 0;
-  //   if(cspd == 0){
-  //     dspd = -30000;
-  //   }else{
-  //     dspd = spd - cspd;
-  //   }
-  //   pwr = pwr-dspd/30000.0;
-  //   if(pwr<0){pwr = 0;}
-  //   if(pwr>1){pwr = 1;}
-  //   Serial.println(pwr);
-  //   ControlMotor(pwr,0);
 
 }
