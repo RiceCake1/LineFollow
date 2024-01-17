@@ -30,7 +30,7 @@ void SelectMultiplexer(int Dec){
 
 int ReadSensor(int sensorNum){
   SelectMultiplexer(sensorNum);
-  return MP1;
+  return analogRead(MP1);
 }
 
 int ReadEncoder(int encoderNum){
@@ -125,6 +125,9 @@ void initAll(){
   //multiplexer input pins init
   pinMode(MP1, INPUT);
   pinMode(MP2, INPUT);
+
+  //set analogread resolution
+  analogReadResolution(12);
 }
 
 void setup() {
