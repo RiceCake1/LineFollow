@@ -9,6 +9,9 @@
 #define MPDC 8
 #define LED 13
 
+float gearRatio;
+float wheelDiameter;
+
 void ChangeBin(int Dec, int *Bin){
 if(Dec>7){
   Serial.println("Error: ChangeBin() argument error");
@@ -56,51 +59,21 @@ void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
   }
 }
 
-int flgR = 0;
-int flgL = 0;
-unsigned int microSec[] = {0,0,0,0};
-int MS[4][2] = {{0,0},{0,0},{0,0},{0,0}};
-int spdR;
-int spdL;
-void updateSpeed(){
-  int MSensor_stream[4][3] = {{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
-  for(int i = 0; i < 4; i++){
-    for(int k = 0; k < 2; k++){
-      MSensor_stream[i][k] = ReadEncoder(i);
-      delayMicroseconds(3);
-    }
-    MSensor_stream[i][2] = ReadEncoder(i);
-    MS[i][1] = MS[i][0];
-    if(MSensor_stream[i][0]==MSensor_stream[i][1] && MSensor_stream[i][1]==MSensor_stream[i][2]){
-      MS[i][0] = MSensor_stream[i][0];
-    }else{
-      MS[i][0] = MS[i][1];
-    }
-  }
 
-  if(!flgR){
-    if(MS[0][0]==1 && MS[0][1]==0){
-      flgR = 1;
-      microSec[0] = micros();
-    }else if(MS[1][0]==1 && MS[1][1]==0){
-      flgR = 1;
-      microSec[1] = micros();
-    }
-  }else{
-    if(MS[1][0]==1 && MS[1][1]==0 && microSec[1]==0){
-      flgR = 0;
-      spdR = micros() - microSec[0];
-      if(spdR > 50000 | spdR < -50000){spdR = 0;}
-      microSec[0] = 0;
-      microSec[1] = 0;
-    }else if(MS[0][0]==1 && MS[0][1]==0 && microSec[0]==0){
-      flgR = 0;
-      spdR = microSec[1] - micros();
-      if(spdR > 50000 | spdR < -50000){spdR = 0;}
-      microSec[0] = 0;
-      microSec[1] = 0;
-    }
-  }
+float _getSpeed( int encoderNum ){
+  SelectMultiplexer(encoderNum);
+  int pulseWidth = pulseIn(MP2, HIGH, 50000);
+
+  int pulsePerRotate = 11;
+  float MotorFreq = 1000000/(pulseWidth*2*pulsePerRotate);
+  float enshu = wheelDiameter*PI;//cm
+  float speed = MotorFreq/gearRatio*enshu;//cm/s
+  return speed;
+}
+
+void getSpeed(float *spd){
+  spd[0] = _getSpeed(0);
+  spd[1] = _getSpeed(2);
 }
 
 void initAll(){
@@ -128,6 +101,9 @@ void initAll(){
 
   //set analogread resolution
   analogReadResolution(12);
+
+  gearRatio = 18.8;
+  wheelDiameter = 5.6;
 }
 
 void setup() {
@@ -137,10 +113,9 @@ void setup() {
 }
 
 void loop() {
-  updateSpeed();
-
-  Serial.print(spdR);
+  float spd[2];
+  getSpeed(spd);
+  Serial.print(spd[0]);
   Serial.print(", ");
-  Serial.println(spdL);
-
+  Serial.println(spd[1]);
 }
