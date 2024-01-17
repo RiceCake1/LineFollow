@@ -20,22 +20,22 @@ if(Dec>7){
   }
 }
 
-int LSensor(int num){
+void SelectMultiplexer(int Dec){
   int Bin[3];
-  ChangeBin(num, Bin);
+  ChangeBin(Dec, Bin);
   digitalWrite(MPDC, Bin[2]);
   digitalWrite(MPDB, Bin[1]);
   digitalWrite(MPDA, Bin[0]);
-  return analogRead(MP1);
 }
 
-int MSensor(int num){
-  int Bin[3];
-  ChangeBin(num, Bin);
-  digitalWrite(MPDC, Bin[2]);
-  digitalWrite(MPDB, Bin[1]);
-  digitalWrite(MPDA, Bin[0]);
-  return MP2;
+int LSensor(int sensorNum){
+  SelectMultiplexer(sensorNum);
+  return MP1;
+}
+
+int ReadEncoder(int encoderNum){
+  SelectMultiplexer(encoderNum);
+  return digitalRead(MP2);
 }
 
 void ControlMotor(float R, float L){ //range -1 to 1
@@ -48,7 +48,7 @@ void ControlMotor(float R, float L){ //range -1 to 1
   }
 
   if(L>=0){
-    analogWrite(ML1, int(256L));
+    analogWrite(ML1, int(256*L));
     analogWrite(ML2, 0);
   }else{
     analogWrite(ML2, int(256*(-L)));
@@ -66,10 +66,10 @@ void updateSpeed(){
   int MSensor_stream[4][3] = {{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
   for(int i = 0; i < 4; i++){
     for(int k = 0; k < 2; k++){
-      MSensor_stream[i][k] = digitalRead(MSensor(i));
+      MSensor_stream[i][k] = ReadEncoder(i);
       delayMicroseconds(3);
     }
-    MSensor_stream[i][2] = digitalRead(MSensor(i));
+    MSensor_stream[i][2] = ReadEncoder(i);
     MS[i][1] = MS[i][0];
     if(MSensor_stream[i][0]==MSensor_stream[i][1] && MSensor_stream[i][1]==MSensor_stream[i][2]){
       MS[i][0] = MSensor_stream[i][0];
@@ -90,11 +90,13 @@ void updateSpeed(){
     if(MS[1][0]==1 && MS[1][1]==0 && microSec[1]==0){
       flgR = 0;
       spdR = micros() - microSec[0];
+      if(spdR > 50000 | spdR < -50000){spdR = 0;}
       microSec[0] = 0;
       microSec[1] = 0;
     }else if(MS[0][0]==1 && MS[0][1]==0 && microSec[0]==0){
       flgR = 0;
       spdR = microSec[1] - micros();
+      if(spdR > 50000 | spdR < -50000){spdR = 0;}
       microSec[0] = 0;
       microSec[1] = 0;
     }
