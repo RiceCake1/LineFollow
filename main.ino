@@ -9,11 +9,6 @@
 #define MPDC 8
 #define LED 13
 
-int MRS1;
-int MRS2;
-int MLS1;
-int MLS2;
-
 void ChangeBin(int Dec, int *Bin){
 if(Dec>7){
   Serial.println("Error: ChangeBin() argument error");
@@ -125,6 +120,7 @@ void initAll(){
   digitalWrite(MPDB, 0);
   digitalWrite(MPDA, 0);
 
+  //multiplexer input pins init
   pinMode(MP1, INPUT);
   pinMode(MP2, INPUT);
 }
@@ -133,12 +129,7 @@ void setup() {
   Serial.begin(9600);
   Serial1.begin(9600);
   initAll();
-  MRS1 = digitalRead(MSensor(0));
-  MRS2 = digitalRead(MSensor(1));
-  MLS1 = digitalRead(MSensor(2));
-  MLS2 = digitalRead(MSensor(3));
 }
-
 
 void loop() {
   updateSpeed();
