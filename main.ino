@@ -12,11 +12,40 @@
 #define RIGHT 0
 #define  LEFT 1
 
+#define SENSOR_DISABLED false
+
 float gearRatio;
 float wheelDiameter;
 
-int sensorCallibrateMin[8] = {1329 ,1371 ,1174 ,1393 ,1146 ,1244 ,1167 ,1393};
-int sensorCallibrateMax[8]= {4095 ,4095 ,4095 ,4095 ,4092 ,4095 ,4095 ,4095};
+int sensorCallibrateMin[8] = {1755, 1455, 2091, 2015, 2241, 1875, 2014, 2262};
+int sensorCallibrateMax[8]= {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
+
+
+
+class Tracer{
+  public:
+    float gearRatio;
+    int sensorCallibrateMin[8];
+    int sensorCallibrateMax[8];
+
+    void setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallibrateMax[8]);
+};
+
+void Tracer::setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallibrateMax[8]){
+  this->gearRatio = gearRatio;
+  for(int i = 0; i < 8; i++){
+    this->sensorCallibrateMin[i] = sensorCallibrateMin[i];
+    this->sensorCallibrateMax[i] = sensorCallibrateMax[i];
+  
+  }
+}
+
+
+
+
+
+
+
 
 void ChangeBin(int Dec, int *Bin){
 if(Dec>7){
@@ -44,7 +73,7 @@ void SelectMultiplexer(int Dec){
 
 int ReadSensor(int sensorNum){
   SelectMultiplexer(sensorNum);
-  delay(2000);
+  delay(1);
   return analogRead(MP1);
 }
 
@@ -139,7 +168,7 @@ int getLinePos(){
   int linePos = 0;
   for(int i=0; i<8; i++){
     int weight = i-3;
-    if(weight<=0) weight--; 
+    if(weight<=0) weight--;
     linePos += ReadSensorNormalized(i)*weight;
   }
   return linePos;
@@ -149,7 +178,7 @@ int getLinePos(){
 float sensorErrorPrev;
 float sensorErrorSum;
 float getPIDsensorValue(){
-  float skP = 0.02;
+  float skP = 0.2;
   float skI = 0.02;
   float skD = 0.01;
   int linePos = getLinePos();
@@ -159,7 +188,7 @@ float getPIDsensorValue(){
   sensorErrorPrev = error;
   Serial.print("PIDSensor: ");
   Serial.println(PIDvalue);
-  return PIDvalue/100;
+  return PIDvalue;
 }
 
 
@@ -168,16 +197,23 @@ float spdErrorPrev[2];
 float spdErrorSum[2];
 
 
-void controlMotorWithPID(float targetSpeed){
+void controlMotorWithPID(float targetSpeed, bool sensorEnabled=true){
   float mkP = 0.02;
   float mkI = 0.01;
   float mkD = 0.001;
+  //float mkI = 0.0;
+  //float mkD = 0.00;
   
   float spd[2];
   float spdError[2];
   getSpeed(spd);
 
-  float sensorPIDValue = getPIDsensorValue();
+  float sensorPIDValue;
+  if(sensorEnabled){
+    sensorPIDValue = getPIDsensorValue();
+  }else{
+    sensorPIDValue = 0;
+  }
   
   spdError[RIGHT] = targetSpeed - spd[RIGHT];
   spdError[LEFT] = targetSpeed - spd[LEFT];
@@ -235,6 +271,16 @@ int calcLinearSpeed(int targetSpeed){
 
 
 void initAll(){
+  //define hardware
+  Tracer Mochi;
+  Mochi.setup(18.8, sensorCallibrateMin, sensorCallibrateMax);
+
+  Tracer Kazushi;
+  Kazushi.setup(10.0, sensorCallibrateMin, sensorCallibrateMax);
+  
+  //select which to write
+  Tracer machine = Kazushi;
+
   //Motors init
   pinMode(MR1, OUTPUT);
   pinMode(MR2, OUTPUT);
@@ -259,9 +305,15 @@ void initAll(){
 
   //set analogread resolution
   analogReadResolution(12);
-
-  gearRatio = 18.8;
+  
+  //set the hardware
+  gearRatio = machine.gearRatio;
   wheelDiameter = 5.6;
+
+  for(int i = 0; i<8; i++){
+    sensorCallibrateMax[i] = machine.sensorCallibrateMax[i];
+    sensorCallibrateMin[i] = machine.sensorCallibrateMin[i];
+  }
 
 }
 
@@ -272,9 +324,12 @@ void setup() {
 }
 
 void loop() {
-  //controlMotorWithPID(calcLinearSpeed(50));
+  controlMotorWithPID(calcLinearSpeed(30),SENSOR_DISABLED);
+  showSpeed();
+  //getPIDsensorValue();
   //supportCallibration();
-  showSensor();
+  //showSensorNormalized();
   //Serial.println(ReadSensor(0));
   //Serial.println(getPIDsensorValue());
+
 }
