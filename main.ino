@@ -17,7 +17,7 @@
 float gearRatio;
 float wheelDiameter;
 
-int sensorCallibrateMin[8] = {1755, 1455, 2091, 2015, 2241, 1875, 2014, 2262};
+int sensorCallibrateMin[8] = {1543, 1058, 1014, 1054, 1525, 1050, 992, 1132};
 int sensorCallibrateMax[8]= {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
 
 
@@ -36,15 +36,8 @@ void Tracer::setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallib
   for(int i = 0; i < 8; i++){
     this->sensorCallibrateMin[i] = sensorCallibrateMin[i];
     this->sensorCallibrateMax[i] = sensorCallibrateMax[i];
-  
   }
 }
-
-
-
-
-
-
 
 
 void ChangeBin(int Dec, int *Bin){
@@ -81,11 +74,16 @@ float ReadSensorNormalized(int sensorNum){
   return mapZeroToOne(sensorCallibrateMin[sensorNum], sensorCallibrateMax[sensorNum], ReadSensor(sensorNum));
 }
 
+float ReadSensorBinary(int sensorNum){
+  int state = 0;
+  if(ReadSensor(sensorNum)==4095) state = 1;
+  return state;
+}
+
 int ReadEncoder(int encoderNum){
   SelectMultiplexer(encoderNum);
   return digitalRead(MP2);
 }
-
 
 
 void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
@@ -128,7 +126,7 @@ int _getEncoderState(int encoderPairNum){
 
 float _getSpeed( int encoderNum ){
   SelectMultiplexer(encoderNum);
-  int pulseWidth = pulseIn(MP2, HIGH, 40000);
+  int pulseWidth = pulseIn(MP2, HIGH, 10000);
   if(pulseWidth==0) return 0;
   int pulsePerRotate = 11;
   float MotorFreq = 1000000/(pulseWidth*2*pulsePerRotate);
@@ -164,12 +162,36 @@ void supportCallibration(){
   Serial.println();
 }
 
+void supportCallibrationAverage(){
+  int sensorData[8] = {0,0,0,0,0,0,0,0};
+  for(int i=0; i<100; i++){
+    for (int j = 0; j < 8; j++){
+      sensorData[j] += ReadSensor(j);
+      //Serial.print(sensorData[j]);
+    }
+    delay(50);
+  }
+  int sensorAverage[8] = {0,0,0,0,0,0,0,0};
+  for(int i=0; i<8; i++){
+    sensorAverage[i] = sensorData[i]/100;
+    Serial.print(sensorAverage[i]);
+    Serial.print(", ");
+  }
+  Serial.println();
+}
+
+int originalpow2(int x, int y){
+  if(y==0) return 1;
+  if(y<0) return -pow(x, -y);
+  return pow(x, y);
+}
+
 int getLinePos(){
   int linePos = 0;
   for(int i=0; i<8; i++){
     int weight = i-3;
     if(weight<=0) weight--;
-    linePos += ReadSensorNormalized(i)*weight;
+    linePos += ReadSensorBinary(i)*weight;
   }
   return linePos;
 }
@@ -178,16 +200,18 @@ int getLinePos(){
 float sensorErrorPrev;
 float sensorErrorSum;
 float getPIDsensorValue(){
-  float skP = 0.2;
-  float skI = 0.02;
-  float skD = 0.01;
+  // float skP = 0.18;
+  // float skI = 0.05;
+  // float skD = 0.2;
+  float skP = 0.8;
+  float skI = 0.01;
+  float skD = 0.0;
+  //float skD = 0.0;
   int linePos = getLinePos();
   float error = linePos;
   sensorErrorSum += error;
-  float PIDvalue = error*skP ;//+ (sensorErrorPrev-error)*skD + sensorErrorSum*skI;
+  float PIDvalue = error*skP + sensorErrorSum*skI + (sensorErrorPrev-error)*skD;
   sensorErrorPrev = error;
-  Serial.print("PIDSensor: ");
-  Serial.println(PIDvalue);
   return PIDvalue;
 }
 
@@ -195,12 +219,10 @@ float getPIDsensorValue(){
 float spdPrev[2]; 
 float spdErrorPrev[2];
 float spdErrorSum[2];
-
-
 void controlMotorWithPID(float targetSpeed, bool sensorEnabled=true){
-  float mkP = 0.02;
-  float mkI = 0.01;
-  float mkD = 0.001;
+  float mkP = 0.07;
+  float mkI = 0.008;
+  float mkD = 0.003;
   //float mkI = 0.0;
   //float mkD = 0.00;
   
@@ -226,9 +248,45 @@ void controlMotorWithPID(float targetSpeed, bool sensorEnabled=true){
   spdErrorPrev[RIGHT] = spdError[RIGHT];
   spdErrorPrev[LEFT] = spdError[LEFT];
   ControlMotor(pwrR, pwrL);
+  Serial.print("Power: ");
   Serial.print(pwrR);
   Serial.print(",");
   Serial.println(pwrL);
+}
+
+void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
+  float mkP = 0.07;
+  float mkI = 0.008;
+  float mkD = 0.003;
+  //float mkI = 0.0;
+  //float mkD = 0.00;
+  
+  float spd[2];
+  float spdError[2];
+  getSpeed(spd);
+  
+  spdError[RIGHT] = rightTargetSpeed - spd[RIGHT];
+  spdError[LEFT] = leftTargetSpeed - spd[LEFT];
+  spdErrorSum[RIGHT] += spdError[RIGHT];
+  spdErrorSum[LEFT] += spdError[LEFT];
+  float pwrR = spdError[RIGHT]*mkP + (spdErrorPrev[RIGHT]-spdError[RIGHT])*mkD + spdErrorSum[RIGHT]*mkI;
+  float pwrL = spdError[LEFT]*mkP + (spdErrorPrev[LEFT]-spdError[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
+  if(pwrR<0) pwrR = 0;
+  if(pwrL<0) pwrL = 0;
+  spdErrorPrev[RIGHT] = spdError[RIGHT];
+  spdErrorPrev[LEFT] = spdError[LEFT];
+  ControlMotor(pwrR, pwrL);
+  // Serial.print("Power: ");
+  // Serial.print(pwrR);
+  // Serial.print(",");
+  // Serial.println(pwrL);
+}
+
+void controlMotorFromSensors(float targetSpeed){
+  float sensorPIDValue = getPIDsensorValue()*7;
+  float rightSpeed = targetSpeed - sensorPIDValue;
+  float leftSpeed = targetSpeed + sensorPIDValue;
+  controlEachMotorWithPID(rightSpeed, leftSpeed);
 }
 
 void showSensorNormalized(){
@@ -242,6 +300,14 @@ void showSensorNormalized(){
 void showSensor(){
   for(int i=0; i<8; i++){
     Serial.print(ReadSensor(i));
+    Serial.print(", ");
+  }
+  Serial.println();
+}
+
+void showSensorBinary(){
+  for(int i=0; i<8; i++){
+    Serial.print(ReadSensorBinary(i));
     Serial.print(", ");
   }
   Serial.println();
@@ -279,7 +345,7 @@ void initAll(){
   Kazushi.setup(10.0, sensorCallibrateMin, sensorCallibrateMax);
   
   //select which to write
-  Tracer machine = Kazushi;
+  Tracer machine = Mochi;
 
   //Motors init
   pinMode(MR1, OUTPUT);
@@ -324,12 +390,14 @@ void setup() {
 }
 
 void loop() {
-  controlMotorWithPID(calcLinearSpeed(30),SENSOR_DISABLED);
-  showSpeed();
-  //getPIDsensorValue();
+  //supportCallibrationAverage();
+  //controlMotorFromSensors(50);
   //supportCallibration();
-  //showSensorNormalized();
+  //showSpeed();
+  showSensor();
+  //showSensorBinary();
   //Serial.println(ReadSensor(0));
   //Serial.println(getPIDsensorValue());
-
+  //showSensor();
+  //ReadSensor(0);
 }
