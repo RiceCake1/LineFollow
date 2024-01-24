@@ -1,0 +1,19 @@
+speed = 50
+  float skP = 4.5;
+  float skI = 0.00015;
+  float skD = 8.0;
+
+speed = 60 
+  float skP = 6.7;
+  float skI = 0.0001;
+  float skD = 7.5;
+
+speed = 60 in global
+float skP = 7.8;
+float skI = 0.0001;
+float skD = 8.5;
+
+speed = 70
+P=
+I=
+D=
