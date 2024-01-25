@@ -132,6 +132,18 @@ float calcLinearSpeed(float targetSpeed, float currentSpeed = currentSpeed[0], f
   }
 }
 
+void calcAccelerationLinearSpeed(float targetSpeed, float *newTargetSpeed, float maxError = 10){
+  float speedDeltas[] = {targetSpeed-currentSpeed[RIGHT], targetSpeed-currentSpeed[LEFT]};
+  if(speedDeltas[0] >= maxError && speedDeltas[1] >= maxError){
+    newTargetSpeed[RIGHT] = min(currentSpeed[RIGHT] + maxError, targetSpeed);
+    newTargetSpeed[LEFT] = min(currentSpeed[LEFT] + maxError, targetSpeed);
+  }else{
+    newTargetSpeed[RIGHT] = targetSpeed;
+    newTargetSpeed[LEFT] = targetSpeed;
+  }
+  return;
+}
+
 int originalpow2(int x, int y){
   if(y==0) return 1;
   if(y<0) return -pow(x, -y);
@@ -147,7 +159,7 @@ int getLinePos(){
 float sensorErrorPrev;
 float sensorErrorSum;
 float getPIDsensorValue(int linePos){
-  float skP = 7.8;
+  float skP = 8.0;
   float skI = 0.0001;
   float skD = 8.5;
   float error = linePos;
@@ -194,8 +206,8 @@ void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
   spdErrorSum[LEFT] += spdError[LEFT];
   float pwrR = spdError[RIGHT]*mkP + (spdErrorPrev[RIGHT]-spdError[RIGHT])*mkD + spdErrorSum[RIGHT]*mkI;
   float pwrL = spdError[LEFT]*mkP + (spdErrorPrev[LEFT]-spdError[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
-  if(pwrR<0) pwrR = 0;
-  if(pwrL<0) pwrL = 0;
+  // if(pwrR<-0.7) pwrR = -0.7;
+  // if(pwrL<-0.7) pwrL = -0.7;
   spdErrorPrev[RIGHT] = spdError[RIGHT];
   spdErrorPrev[LEFT] = spdError[LEFT];
   ControlMotor(pwrR, pwrL);
@@ -210,8 +222,10 @@ float limitSpeedOnCorner(float targetSpeed, float deacceleratedSpeed, int linePo
 void controlMotorFromSensors(float targetSpeed, float deacceleratedSpeed=40){
   int linePos = getLinePos();
   float sensorPIDValue = getPIDsensorValue(linePos);
-  float rightSpeed = targetSpeed - sensorPIDValue;
-  float leftSpeed = targetSpeed + sensorPIDValue;
+  float newTargetSpeed[2];
+  calcAccelerationLinearSpeed(targetSpeed, newTargetSpeed);
+  float rightSpeed = newTargetSpeed[RIGHT] - sensorPIDValue;
+  float leftSpeed = newTargetSpeed[LEFT] + sensorPIDValue;
   controlEachMotorWithPID(rightSpeed, leftSpeed);
 }
 
@@ -239,13 +253,13 @@ void showLoopSpeed(int loopNum){
   
   if(loopCount==loopNum){
     endMillis = millis();
-    // Serial.print("Loop Speed ( ");
-    // Serial.print(loopNum);
-    // Serial.print(" iters): ");
-    // Serial.print((endMillis-initialMillis));
-    // Serial.println("ms");
+    Serial.print("Loop Speed ( ");
+    Serial.print(loopNum);
+    Serial.print(" iters): ");
+    Serial.print((endMillis-initialMillis));
+    Serial.println("ms");
     loopCount = 0;
-    showSpeed();
+    //showSpeed();
   }
 }
 
@@ -336,7 +350,7 @@ void loop() {
     //getLinePos();
     //getSpeed(currentSpeed);
     getSpeedWithTime(currentSpeed);
-    controlMotorFromSensors(50); 
+    controlMotorFromSensors(100); 
     //controlMotorWithPID(calcLinearSpeed(50), SENSOR_DISABLED);
     //supportCallibrationAverage();
     //supportCallibration();
@@ -347,6 +361,8 @@ void loop() {
     //Serial.println(getPIDsensorValue());
     //showSensor();
     //ReadSensor(0);
+  }else{
+    controlEachMotorWithPID(0,0);
   }
-  showLoopSpeed(1000);
+  showLoopSpeed(100000);
 }
