@@ -14,13 +14,14 @@
 
 float gearRatio;
 float wheelDiameter;
+float distancePerMotorRotate;
 
 int ENCODER_PIN[2] = {ENCODER_R, ENCODER_L};
 
 int sensorCallibrateMin[8] = {1543, 1058, 1014, 1054, 1525, 1050, 992, 1132};
 int sensorCallibrateMax[8]= {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
 
-int isActive = true;
+int isActive = false;
 
 float currentSpeed[2] = {0,0};
 
@@ -38,18 +39,6 @@ void Tracer::setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallib
   for(int i = 0; i < 8; i++){
     this->sensorCallibrateMin[i] = sensorCallibrateMin[i];
     this->sensorCallibrateMax[i] = sensorCallibrateMax[i];
-  }
-}
-
-
-void ChangeBin(int Dec, int *Bin){
-if(Dec>7){
-  Serial.println("Error: ChangeBin() argument error");
-  }else{
-    for (int i = 0; i < 3; i++) {
-      Bin[i] = Dec % 2;
-      Dec = Dec / 2;
-    }
   }
 }
 
@@ -99,16 +88,15 @@ bool _isChanged(int encoderNum){ //argument range 0 or 1
   return changed;
 }
 
+int deadLineTime = 50000;
+int pulsePerRotate = 11;
 int prevSignalTime[2] = {0,0};
 float _getSpeedWithTime(int motorNum){
   int nowTime = micros();
-  int deadLineTime = 50000;
   int deltaTime = nowTime - prevSignalTime[motorNum];
   if(_isChanged(motorNum)){
-    int pulsePerRotate = 11;
     float MotorFreq = 1000000/(deltaTime*pulsePerRotate);
-    float enshu = wheelDiameter*PI;//cm
-    float speed = MotorFreq/gearRatio*enshu;//cm/s
+    float speed = MotorFreq*distancePerMotorRotate;//cm/s
     prevSignalTime[motorNum] = nowTime;
     return speed;
   }else if(deltaTime > deadLineTime){
@@ -144,24 +132,24 @@ void calcAccelerationLinearSpeed(float targetSpeed, float *newTargetSpeed, float
   return;
 }
 
-int originalpow2(int x, int y){
-  if(y==0) return 1;
-  if(y<0) return -pow(x, -y);
-  return pow(x, y);
-}
-
 int getLinePos(){
   float linePos = mapFloat(float(analogRead(SENSOR_PIN)),7.0f,673.0f,-10.0f,10.0f);
   return linePos;
 }
 
-
 float sensorErrorPrev;
 float sensorErrorSum;
 float getPIDsensorValue(int linePos){
-  float skP = 8.0;
-  float skI = 0.0001;
-  float skD = 8.5;
+  float skP = 10.0;
+  float skI = 0.0002;
+  float skD = 12.5;
+
+  if(currentSpeed[RIGHT]<=30 && currentSpeed[LEFT]<=30){
+    skP = 4.5;
+    skI = 0.00015;
+    skD = 8.0;
+
+  }
   float error = linePos;
   sensorErrorSum += error;
   float PIDvalue = error*skP + sensorErrorSum*skI + (sensorErrorPrev-error)*skD;
@@ -174,28 +162,9 @@ float spdPrev[2];
 float spdErrorPrev[2];
 float spdErrorSum[2];
 float power[2];
-void controlMotorWithPID(float targetSpeed, bool sensorEnabled=true){
-  float mkP = 0.04;
-  float mkI = 0.0015;
-  float mkD = 0.05;
-  
-  float spdError[2];
-
-  float sensorPIDValue;
-  if(sensorEnabled){
-    sensorPIDValue = getPIDsensorValue(getLinePos());
-  }else{
-    sensorPIDValue = 0;
-  }
-  
-  float rightSpeed = targetSpeed - sensorPIDValue;
-  float leftSpeed = targetSpeed + sensorPIDValue;
-  controlEachMotorWithPID(rightSpeed, leftSpeed);
-}
-
 void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
   float mkP = 0.04;
-  float mkI = 0.000007;
+  float mkI = 0.000015;
   float mkD = 0.05;
   
   float spdError[2];
@@ -206,8 +175,6 @@ void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
   spdErrorSum[LEFT] += spdError[LEFT];
   float pwrR = spdError[RIGHT]*mkP + (spdErrorPrev[RIGHT]-spdError[RIGHT])*mkD + spdErrorSum[RIGHT]*mkI;
   float pwrL = spdError[LEFT]*mkP + (spdErrorPrev[LEFT]-spdError[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
-  // if(pwrR<-0.7) pwrR = -0.7;
-  // if(pwrL<-0.7) pwrL = -0.7;
   spdErrorPrev[RIGHT] = spdError[RIGHT];
   spdErrorPrev[LEFT] = spdError[LEFT];
   ControlMotor(pwrR, pwrL);
@@ -242,24 +209,22 @@ void showLinePos(){
   Serial.println(getLinePos());
 }
 
-int initialMillis;
-int endMillis;
+int initialMicros;
 int loopCount = 0;
 void showLoopSpeed(int loopNum){
   if(loopCount==0){
-    initialMillis = millis();
+    initialMicros = micros();
   }
   loopCount++;
   
   if(loopCount==loopNum){
-    endMillis = millis();
     Serial.print("Loop Speed ( ");
     Serial.print(loopNum);
     Serial.print(" iters): ");
-    Serial.print((endMillis-initialMillis));
-    Serial.println("ms");
+    Serial.print((micros()-initialMicros)/loopNum);
+    Serial.println("us");
     loopCount = 0;
-    //showSpeed();
+    showSpeed();
   }
 }
 
@@ -285,8 +250,7 @@ void initAll(){
   spdErrorPrev[LEFT] = 0;
   spdErrorSum[RIGHT] = 0;
   spdErrorSum[LEFT] = 0;
-  initialMillis = 0;
-  endMillis = 0;
+  initialMicros = 0;
   loopCount = 0;
   
   //Motors init
@@ -309,6 +273,7 @@ void initAll(){
   //set the hardware
   gearRatio = machine.gearRatio;
   wheelDiameter = 5.6;
+  distancePerMotorRotate = wheelDiameter*PI/gearRatio;
 
   for(int i = 0; i<8; i++){
     sensorCallibrateMax[i] = machine.sensorCallibrateMax[i];
@@ -341,28 +306,22 @@ void setup() {
   Serial.begin(9600);
   Serial1.begin(9600);
   initAll();
-  //ControlMotor(0.3,0);
 }
 
 void loop() {
   Xbee();
-  if (isActive){
-    //getLinePos();
-    //getSpeed(currentSpeed);
+  if (isActive){     
     getSpeedWithTime(currentSpeed);
-    controlMotorFromSensors(100); 
+    controlMotorFromSensors(105);
     //controlMotorWithPID(calcLinearSpeed(50), SENSOR_DISABLED);
     //supportCallibrationAverage();
     //supportCallibration();
     //showSpeed();
     //showSensor();
     //showSensorBinary();
-    //Serial.println(ReadSensor(1));
-    //Serial.println(getPIDsensorValue());
     //showSensor();
-    //ReadSensor(0);
   }else{
     controlEachMotorWithPID(0,0);
   }
-  showLoopSpeed(100000);
+  //showLoopSpeed(10000);
 }

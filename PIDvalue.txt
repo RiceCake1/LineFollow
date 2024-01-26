@@ -1,5 +1,5 @@
 speed = 50
-  float skP = 4.5;
+  float skP = 6.0;
   float skI = 0.00015;
   float skD = 8.0;
 
@@ -13,7 +13,7 @@ float skP = 7.8;
 float skI = 0.0001;
 float skD = 8.5;
 
-speed = 70
-P=
-I=
-D=
+speed = 90
+float skP = 10.0;
+  float skI = 0.0002;
+  float skD = 12.5;
