@@ -18,35 +18,17 @@ float distancePerMotorRotate;
 
 int ENCODER_PIN[2] = {ENCODER_R, ENCODER_L};
 
-int sensorCallibrateMin[8] = {1543, 1058, 1014, 1054, 1525, 1050, 992, 1132};
-int sensorCallibrateMax[8]= {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
-
-int isActive = false;
+int isActive = true;
 
 float currentSpeed[2] = {0,0};
 
-class Tracer{
-  public:
-    float gearRatio;
-    int sensorCallibrateMin[8];
-    int sensorCallibrateMax[8];
-
-    void setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallibrateMax[8]);
-};
-
-void Tracer::setup(float gearRatio, int sensorCallibrateMin[8], int sensorCallibrateMax[8]){
-  this->gearRatio = gearRatio;
-  for(int i = 0; i < 8; i++){
-    this->sensorCallibrateMin[i] = sensorCallibrateMin[i];
-    this->sensorCallibrateMax[i] = sensorCallibrateMax[i];
-  }
-}
-
+//original map function which can map with float values
 float mapFloat(float InputValue, float InputLower, float InputUpper, float OutputLower, float OutputUpper){
   float value = (OutputUpper-OutputLower)*(InputValue - InputLower) / (InputUpper - InputLower) + OutputLower;
   return max(min(value, OutputUpper), OutputLower);
 }
 
+//motor power control function
 void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
   if(Rspeed>=0){
     analogWrite(MR1, int(255*Rspeed));
@@ -65,6 +47,7 @@ void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
   }
 }
 
+//chattering eliminator function for the binary hall sensors 
 int prevEncoderState[2] = {0,0};
 int _smoothEncoderSignal(int encoderNum){
   while(true){
@@ -78,6 +61,7 @@ int _smoothEncoderSignal(int encoderNum){
   }
 }
 
+//signal state detection function
 bool _isChanged(int encoderNum){ //argument range 0 or 1
   int encoderState = _smoothEncoderSignal(encoderNum);
   bool changed = false;
@@ -88,6 +72,7 @@ bool _isChanged(int encoderNum){ //argument range 0 or 1
   return changed;
 }
 
+//measure speed with parallel processing emulation (amazingly faster than before)
 int deadLineTime = 50000;
 int pulsePerRotate = 11;
 int prevSignalTime[2] = {0,0};
@@ -106,20 +91,13 @@ float _getSpeedWithTime(int motorNum){
   }
 }
 
+//speed update function
 void getSpeedWithTime(float *spd){
   spd[RIGHT] = _getSpeedWithTime(RIGHT);
   spd[LEFT] = _getSpeedWithTime(LEFT);
 }
 
-
-float calcLinearSpeed(float targetSpeed, float currentSpeed = currentSpeed[0], float maxError=20){
-  if(targetSpeed >= currentSpeed){
-    return min(currentSpeed + maxError, targetSpeed); 
-  }else{
-    return max(currentSpeed - maxError, targetSpeed);
-  }
-}
-
+//smooth start speed function
 void calcAccelerationLinearSpeed(float targetSpeed, float *newTargetSpeed, float maxError = 10){
   float speedDeltas[] = {targetSpeed-currentSpeed[RIGHT], targetSpeed-currentSpeed[LEFT]};
   if(speedDeltas[0] >= maxError && speedDeltas[1] >= maxError){
@@ -144,6 +122,7 @@ float getPIDsensorValue(int linePos){
   float skI = 0.0002;
   float skD = 12.5;
 
+  //on start
   if(currentSpeed[RIGHT]<=30 && currentSpeed[LEFT]<=30){
     skP = 4.5;
     skI = 0.00015;
@@ -186,18 +165,18 @@ float limitSpeedOnCorner(float targetSpeed, float deacceleratedSpeed, int linePo
   return spd;
 }
 
-void controlMotorFromSensors(float targetSpeed, float deacceleratedSpeed=40){
+void controlMotorFromSensors(float targetSpeed, float deacceleratedSpeed=10){
   int linePos = getLinePos();
   float sensorPIDValue = getPIDsensorValue(linePos);
   float newTargetSpeed[2];
-  calcAccelerationLinearSpeed(targetSpeed, newTargetSpeed);
+  calcAccelerationLinearSpeed(targetSpeed, newTargetSpeed, deacceleratedSpeed);
   float rightSpeed = newTargetSpeed[RIGHT] - sensorPIDValue;
   float leftSpeed = newTargetSpeed[LEFT] + sensorPIDValue;
   controlEachMotorWithPID(rightSpeed, leftSpeed);
 }
 
 void showSpeed(){
-  //Serial1.print("Speed: ");
+  Serial1.print("Speed: ");
   Serial1.print(currentSpeed[RIGHT]);
   Serial1.print(", ");
   Serial1.print(80);
@@ -230,17 +209,6 @@ void showLoopSpeed(int loopNum){
 
 
 void initAll(){
-  //define hardware
-  Tracer Mochi;
-  Mochi.setup(18.8, sensorCallibrateMin, sensorCallibrateMax);
-
-  Tracer Kazushi;
-  Kazushi.setup(10.0, sensorCallibrateMin, sensorCallibrateMax);
-  
-
-  //select which to write
-  Tracer machine = Mochi;
-
   //global variables initialize
   currentSpeed[RIGHT] = 0;
   currentSpeed[LEFT] = 0;
@@ -271,14 +239,9 @@ void initAll(){
   pinMode(SENSOR_PIN, INPUT);
   
   //set the hardware
-  gearRatio = machine.gearRatio;
+  gearRatio = 18.8;
   wheelDiameter = 5.6;
   distancePerMotorRotate = wheelDiameter*PI/gearRatio;
-
-  for(int i = 0; i<8; i++){
-    sensorCallibrateMax[i] = machine.sensorCallibrateMax[i];
-    sensorCallibrateMin[i] = machine.sensorCallibrateMin[i];
-  }
 }
 
 void Xbee(){
@@ -294,10 +257,7 @@ void Xbee(){
       initAll();
       isActive = true;
       break;
-
-      
       default: break;
-
     }
   }
 }
@@ -312,16 +272,8 @@ void loop() {
   Xbee();
   if (isActive){     
     getSpeedWithTime(currentSpeed);
-    controlMotorFromSensors(105);
-    //controlMotorWithPID(calcLinearSpeed(50), SENSOR_DISABLED);
-    //supportCallibrationAverage();
-    //supportCallibration();
-    //showSpeed();
-    //showSensor();
-    //showSensorBinary();
-    //showSensor();
+    controlMotorFromSensors(100);
   }else{
     controlEachMotorWithPID(0,0);
   }
-  //showLoopSpeed(10000);
 }
