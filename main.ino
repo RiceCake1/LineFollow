@@ -131,7 +131,7 @@ float getPIDsensorValue(int linePos){
   }
   float error = linePos;
   sensorErrorSum += error;
-  float PIDvalue = error*skP + sensorErrorSum*skI + (sensorErrorPrev-error)*skD;
+  float PIDvalue = error*skP + sensorErrorSum*skI + (error - sensorErrorPrev)*skD;
   sensorErrorPrev = error;
   return PIDvalue;
 }
@@ -152,8 +152,8 @@ void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
   spdError[LEFT] = leftTargetSpeed - currentSpeed[LEFT];
   spdErrorSum[RIGHT] += spdError[RIGHT];
   spdErrorSum[LEFT] += spdError[LEFT];
-  float pwrR = spdError[RIGHT]*mkP + (spdErrorPrev[RIGHT]-spdError[RIGHT])*mkD + spdErrorSum[RIGHT]*mkI;
-  float pwrL = spdError[LEFT]*mkP + (spdErrorPrev[LEFT]-spdError[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
+  float pwrR = spdError[RIGHT]*mkP + (spdError[RIGHT]-spdErrorPrev[RIGHT])*mkD + spdErrorSum[RIGHT]*mkI;
+  float pwrL = spdError[LEFT]*mkP + (spdError[LEFT]-spdErrorPrev[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
   spdErrorPrev[RIGHT] = spdError[RIGHT];
   spdErrorPrev[LEFT] = spdError[LEFT];
   controlMotor(pwrR, pwrL);
