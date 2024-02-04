@@ -29,7 +29,7 @@ float mapFloat(float InputValue, float InputLower, float InputUpper, float Outpu
 }
 
 //motor power control function
-void ControlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
+void controlMotor(float Rspeed, float Lspeed){ //argument range -1 to 1
   if(Rspeed>=0){
     analogWrite(MR1, int(255*Rspeed));
     analogWrite(MR2, 0);
@@ -98,7 +98,7 @@ void getSpeedWithTime(float *spd){
 }
 
 //smooth start speed function
-void calcAccelerationLinearSpeed(float targetSpeed, float *newTargetSpeed, float maxError = 10){
+void delayAccelerationSpeed(float targetSpeed, float *newTargetSpeed, float maxError = 10){
   float speedDeltas[] = {targetSpeed-currentSpeed[RIGHT], targetSpeed-currentSpeed[LEFT]};
   if(speedDeltas[0] >= maxError && speedDeltas[1] >= maxError){
     newTargetSpeed[RIGHT] = min(currentSpeed[RIGHT] + maxError, targetSpeed);
@@ -110,7 +110,7 @@ void calcAccelerationLinearSpeed(float targetSpeed, float *newTargetSpeed, float
   return;
 }
 
-int getLinePos(){
+float getLinePos(){
   float linePos = mapFloat(float(analogRead(SENSOR_PIN)),7.0f,673.0f,-10.0f,10.0f);
   return linePos;
 }
@@ -156,7 +156,7 @@ void controlEachMotorWithPID(float rightTargetSpeed, float leftTargetSpeed){
   float pwrL = spdError[LEFT]*mkP + (spdErrorPrev[LEFT]-spdError[LEFT])*mkD + spdErrorSum[LEFT]*mkI;
   spdErrorPrev[RIGHT] = spdError[RIGHT];
   spdErrorPrev[LEFT] = spdError[LEFT];
-  ControlMotor(pwrR, pwrL);
+  controlMotor(pwrR, pwrL);
 }
 
 float limitSpeedOnCorner(float targetSpeed, float deacceleratedSpeed, int linePositon){
@@ -169,7 +169,7 @@ void controlMotorFromSensors(float targetSpeed, float deacceleratedSpeed=10){
   int linePos = getLinePos();
   float sensorPIDValue = getPIDsensorValue(linePos);
   float newTargetSpeed[2];
-  calcAccelerationLinearSpeed(targetSpeed, newTargetSpeed, deacceleratedSpeed);
+  delayAccelerationSpeed(targetSpeed, newTargetSpeed, deacceleratedSpeed);
   float rightSpeed = newTargetSpeed[RIGHT] - sensorPIDValue;
   float leftSpeed = newTargetSpeed[LEFT] + sensorPIDValue;
   controlEachMotorWithPID(rightSpeed, leftSpeed);
